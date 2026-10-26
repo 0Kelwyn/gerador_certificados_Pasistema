@@ -104,11 +104,13 @@ body::after{content:'♡';font-size:150px;right:-18px;bottom:30px;transform:rota
 @media(max-width:700px){.love-footer{padding:12px 16px}.brand{font-size:16px}}
 </style>
 
+<style>.background-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:340px;overflow:auto}.background-option{padding:6px;border:1px solid var(--line);border-radius:10px;background:#fffafb;color:var(--ink);font-size:11px;overflow-wrap:anywhere}.background-option img{display:block;width:100%;height:90px;object-fit:contain;margin-bottom:5px}.background-option[aria-pressed="true"]{outline:2px solid var(--accent)}</style>
 </head>
 <body>
 <header class="topbar">
   <div><div class="row" style="gap:9px;flex-wrap:wrap"><div class="brand">Gerador de Certificados da Paola</div><span class="local-badge"></span></div><div class="save-state" id="saveState">arrumando tudo pra você, meu amor…</div></div>
   <div class="top-actions">
+    <button class="btn dark" id="saveJsonFile">Salvar modelos.json</button>
     <button class="btn dark" id="exportBackup">Exportar backup</button>
     <label class="btn dark" for="importBackup">Importar backup</label><input class="hidden" type="file" id="importBackup" accept="application/json,.json" />
     <button class="btn danger" id="shutdown">Fechar / limpar tela</button>
@@ -221,12 +223,22 @@ function migrateState(){let changed=false;if(!Array.isArray(state.models)){state
 function activeModel(){return state.models.find(m=>m.id===activeModelId)||null}function activePage(){const m=activeModel();return m?.pages?.[activePageIndex]||null}function activeBlock(){return activePage()?.blocks?.find(b=>b.id===activeBlockId)||null}
 function escapeHtml(s){return String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]))}
 function setSave(text,cls=''){const e=$('#saveState');e.textContent=text;e.className='save-state '+cls}
+
+let repositoryBackgrounds=[],jsonFileHandle=null,publishedVersion='';
+function backgroundUrl(path){return './'+path.split('/').map(encodeURIComponent).join('/')}
+async function loadRepositoryBackgrounds(){
+ try{const r=await fetch('./fundos.json',{cache:'no-store'});if(!r.ok)throw new Error('Catálogo indisponível');repositoryBackgrounds=await r.json();if(!Array.isArray(repositoryBackgrounds))throw new Error('Catálogo inválido')}catch(e){console.warn(e);repositoryBackgrounds=[]}
+}
+function backgroundPickerHtml(page){return '<div class="field"><label>Imagens do projeto</label><div class="background-grid">'+repositoryBackgrounds.map(path=>'<button type="button" class="background-option" data-background="'+escapeHtml(path)+'" aria-pressed="'+(page.backgroundPath===path)+'"><img loading="lazy" src="'+escapeHtml(backgroundUrl(path))+'" alt=""><span>'+escapeHtml(path.split('/').pop())+'</span></button>').join('')+'</div><div class="hint">A escolha fica no backup JSON. Use Salvar modelos.json para gravar no arquivo da máquina.</div></div>'}
+async function writeJsonFile(){if(!jsonFileHandle)return;const writable=await jsonFileHandle.createWritable();await writable.write(JSON.stringify(state,null,2));await writable.close()}
+$('#saveJsonFile').onclick=async()=>{try{if(!window.showSaveFilePicker){downloadBlob(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),'modelos.json');return}jsonFileHandle=await window.showSaveFilePicker({suggestedName:'modelos.json',types:[{description:'Modelos de certificados',accept:{'application/json':['.json']}}]});await saveNow()}catch(e){if(e.name!=='AbortError')alert('Não foi possível salvar o JSON: '+e.message)}};
+
 function scheduleSave(){setSave('Salvando suas alterações, meu amor…');clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,450)}
 const DB_NAME='GeradorCertificadosPaolaLocal';const DB_VERSION=1;const DB_STORE='app';const DB_KEY='state';
 function openLocalDb(){return new Promise((resolve,reject)=>{if(!('indexedDB'in window)){reject(new Error('Este navegador não liberou o armazenamento local.'));return}const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(DB_STORE))db.createObjectStore(DB_STORE)};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Não foi possível abrir o armazenamento local.'))})}
 async function localDbGet(){const db=await openLocalDb();return new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readonly'),req=tx.objectStore(DB_STORE).get(DB_KEY);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);tx.oncomplete=()=>db.close()})}
 async function localDbPut(value){const db=await openLocalDb();return new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put(value,DB_KEY);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>{db.close();reject(tx.error)}})}
-async function saveNow(){clearTimeout(saveTimer);try{await localDbPut(clone(state));setSave('Alterações salvas neste navegador. Exporte o backup e substitua modelos.json no GitHub para publicar.','ok')}catch(e){console.error(e);setSave('Não consegui salvar automaticamente. Exporte um backup: '+e.message)}}
+async function saveNow(){clearTimeout(saveTimer);try{await localDbPut({publishedVersion,state:clone(state)});await writeJsonFile();setSave(jsonFileHandle?'Alterações salvas no arquivo modelos.json e neste navegador.':'Alterações salvas neste navegador. Use Salvar modelos.json para gravar no arquivo.','ok')}catch(e){console.error(e);setSave('Não consegui salvar automaticamente. Exporte um backup: '+e.message)}}
 async function tryLocalFont(family,names){for(const name of names){try{const face=new FontFace(family,`local("${String(name).replaceAll('"','\\"')}")`);await face.load();document.fonts.add(face);return true}catch(e){}}return false}
 async function loadWindowsFonts(){fontAvailability['Clear Sans']=await tryLocalFont('Clear Sans',['Clear Sans Regular','ClearSans-Regular','Clear Sans','ClearSans','Clear Sans Light','ClearSans-Light']);fontAvailability['Carelia Upright']=await tryLocalFont('Carelia Upright',['Carelia Upright','CareliaUpright','Carelia']);windowsFonts=['Clear Sans','Carelia Upright'];renderFontStatus()}
 function renderFontStatus(){const box=$('#fontStatus');if(!box)return;box.innerHTML=windowsFonts.map(f=>`<span class="font-pill ${fontAvailability[f]?'ok':'warn'}">${escapeHtml(f)}: ${fontAvailability[f]?'pronta ♡':'não encontrada no Windows'}</span>`).join('')}
@@ -235,9 +247,13 @@ async function loadState(){
   await loadWindowsFonts();
   const response=await fetch('./modelos.json',{cache:'no-store'});
   if(!response.ok)throw new Error('Não foi possível carregar modelos.json (HTTP '+response.status+').');
-  const loaded=await response.json();
+  const source=await response.text();
+  publishedVersion=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source)))).map(x=>x.toString(16).padStart(2,'0')).join('');
+  const loaded=JSON.parse(source);
+  await loadRepositoryBackgrounds();
   if(!loaded||!Array.isArray(loaded.models))throw new Error('O arquivo modelos.json não contém uma lista de modelos válida.');
   state=loaded;
+  try{const saved=await localDbGet();if(saved?.publishedVersion===publishedVersion&&Array.isArray(saved.state?.models))state=saved.state}catch(e){console.warn(e)}
   migrateState();
   if(!state.models.length)state.models=[newModel()];
   const carelia=state.customFonts?.carelia?.regular;
@@ -285,15 +301,17 @@ function renderEditor(){const m=activeModel(),settings=$('#modelSettings'),stage
  <div class="row"><div class="section-title grow" style="margin:0">Páginas</div>${m.pages.length<2?'<button class="btn small" id="addPage2">+ Página 2</button>':''}</div>
  <div class="page-tabs">${m.pages.map((_,i)=>`<button class="page-chip ${i===activePageIndex?'active':''}" data-page="${i}">Página ${i+1}</button>`).join('')}</div>
  ${activePageIndex===1?'<button class="btn danger small" id="removePage2">Remover Página 2</button>':''}
- <div class="field"><label>Fundo da Página ${activePageIndex+1} (PNG/JPG)</label><input type="file" id="bgFile" accept="image/png,image/jpeg,image/webp" />${p.background?'<button class="btn danger" id="removeBg">Remover fundo desta página</button>':''}</div>
+ ${backgroundPickerHtml(p)}
+ <div class="field"><label>Ou enviar um fundo da máquina (PNG/JPG)</label><input type="file" id="bgFile" accept="image/png,image/jpeg,image/webp" />${p.background?'<button class="btn danger" id="removeBg">Remover fundo desta página</button>':''}</div>
  <div class="divider"></div><div class="row"><div class="section-title grow" style="margin:0">Textos da Página ${activePageIndex+1}</div><button class="btn" id="addBlock">+ Texto</button></div>
  <div class="block-list">${(p.blocks||[]).map((x,i)=>`<button class="block-chip ${x.id===activeBlockId?'active':''}" data-block="${x.id}">Texto ${i+1}</button>`).join('')}</div>${b?blockSettingsHtml(b):'<div class="hint">A página pode ficar apenas com a imagem ou você pode adicionar blocos de texto.</div>'}`;
  $('#modelName').oninput=e=>{m.name=e.target.value;renderModelList();renderGenerateList();scheduleSave()};
  $$('.page-chip').forEach(x=>x.onclick=()=>{activePageIndex=Number(x.dataset.page);activeBlockId=m.pages[activePageIndex]?.blocks?.[0]?.id||null;renderEditor()});
  $('#addPage2')?.addEventListener('click',()=>{m.pages.push(defaultPage(false));activePageIndex=1;activeBlockId=null;renderAll();scheduleSave()});
  $('#removePage2')?.addEventListener('click',()=>{if(!confirm('Remover a Página 2 deste certificado?'))return;m.pages.splice(1,1);activePageIndex=0;activeBlockId=m.pages[0]?.blocks?.[0]?.id||null;renderAll();scheduleSave()});
- $('#bgFile').onchange=e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>15*1024*1024){alert('Use uma imagem de até 15 MB.');return}const r=new FileReader();r.onload=()=>{p.background=String(r.result||'');renderEditor();renderModelList();scheduleSave()};r.readAsDataURL(f)};
- $('#removeBg')?.addEventListener('click',()=>{p.background='';renderEditor();renderModelList();scheduleSave()});
+ $$('.background-option').forEach(button=>button.onclick=async()=>{const path=button.dataset.background;try{await loadImage(backgroundUrl(path));p.background=backgroundUrl(path);p.backgroundPath=path;renderEditor();renderModelList();scheduleSave()}catch(e){alert('Não foi possível carregar este fundo. Tente novamente.')}});
+ $('#bgFile').onchange=e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>15*1024*1024){alert('Use uma imagem de até 15 MB.');return}const r=new FileReader();r.onload=()=>{p.background=String(r.result||'');delete p.backgroundPath;renderEditor();renderModelList();scheduleSave()};r.readAsDataURL(f)};
+ $('#removeBg')?.addEventListener('click',()=>{p.background='';delete p.backgroundPath;renderEditor();renderModelList();scheduleSave()});
  $('#addBlock').onclick=()=>{const nb=defaultBlock('Digite o texto. Use {{NOME}}, {{CPF}}, {{CNPJ}}, {{NOME_CNPJ}} e {{CIDADE_DATA}}.',35+(p.blocks?.length||0)*5,28);p.blocks=p.blocks||[];p.blocks.push(nb);activeBlockId=nb.id;renderEditor();scheduleSave()};
  $$('.block-chip').forEach(x=>x.onclick=()=>{activeBlockId=x.dataset.block;renderEditor()});if(b)bindBlockSettings(b,p)}
 function blockSettingsHtml(b){return`<div class="field"><label>Texto padrão</label><textarea id="blockTemplate">${escapeHtml(b.template||'')}</textarea><div class="row" style="flex-wrap:wrap"><button class="btn grow" id="insertName">{{NOME}}</button><button class="btn grow" id="insertCpf">{{CPF}}</button><button class="btn grow" id="insertCnpj">{{CNPJ}}</button><button class="btn grow" id="insertCnpjName">{{NOME_CNPJ}}</button><button class="btn grow" id="insertCityDate">{{CIDADE_DATA}}</button></div><label class="btn" for="textFile" style="text-align:center">Carregar texto .txt</label><input class="hidden" type="file" id="textFile" accept="text/plain,.txt" /><div class="hint">Nome e CPF ficam em negrito e sublinhados quando usados como variáveis. CNPJ e nome/razão social ficam sempre sem negrito e sem sublinhado. A data mantém a formatação normal.</div></div>

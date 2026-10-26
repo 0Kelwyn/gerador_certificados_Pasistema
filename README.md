@@ -19,3 +19,11 @@ Alterações feitas na interface ficam apenas no armazenamento do navegador. Par
 ## Observações
 
 A geração de PDFs ocorre no navegador. O arquivo `ClearSans-Light.ttf` está incluído; a fonte Carelia é carregada do backup JSON original. Abra pelo endereço do GitHub Pages, não clicando no arquivo `index.html` local (o carregamento de JSON usa `fetch`).
+
+## Escolher e salvar fundos
+
+Na configuração de cada página, **Imagens do projeto** mostra as miniaturas dos arquivos listados em `fundos.json`. Clique em uma imagem para aplicá-la. O caminho é salvo em `pages[].background` e `pages[].backgroundPath`, junto dos demais dados do modelo.
+
+Clique em **Salvar modelos.json** e selecione o arquivo na máquina. Nos navegadores compatíveis, as próximas alterações são gravadas nesse arquivo enquanto a página estiver aberta. Nos demais, o botão baixa o JSON atualizado. Para publicar para todos, envie o JSON ao GitHub. As alterações locais são restauradas ao recarregar enquanto o JSON publicado não mudar.
+
+Ao adicionar imagens ao repositório, acrescente seus caminhos relativos em `fundos.json`. Mantenha as imagens publicadas nos mesmos caminhos para que os fundos continuem funcionando.
